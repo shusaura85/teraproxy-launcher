@@ -4,195 +4,370 @@ interface
 
 uses
   Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants, System.Classes, Vcl.Graphics,
-  Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Winapi.ShellApi, Winapi.TlHelp32,
-  Vcl.StdCtrls, uFunctions, Vcl.Imaging.jpeg, Vcl.ExtCtrls, IniFiles;
+  Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls, Vcl.Imaging.jpeg, IniFiles,
+  Vcl.ExtCtrls, Vcl.Grids, Winapi.ShellApi, Winapi.TlHelp32, uFunctions;
 
 type
-  TForm1 = class(TForm)
+  TfrmMain = class(TForm)
     Image1: TImage;
     lblStatus: TLabel;
-    TimerStartProxy: TTimer;
-    TimerDetectProxy: TTimer;
-    TimerStartTera: TTimer;
+    apps: TStringGrid;
     LocateApp: TOpenDialog;
+    TimerStartApp: TTimer;
+    lblStatus2: TLabel;
     TimerClose: TTimer;
+    TimerMainApp: TTimer;
+    TimerDetectApp: TTimer;
     procedure FormCreate(Sender: TObject);
     procedure FormDestroy(Sender: TObject);
-    procedure TimerStartProxyTimer(Sender: TObject);
-    procedure TimerDetectProxyTimer(Sender: TObject);
-    procedure TimerStartTeraTimer(Sender: TObject);
+    procedure TimerStartAppTimer(Sender: TObject);
+    procedure TimerDetectAppTimer(Sender: TObject);
+    procedure TimerMainAppTimer(Sender: TObject);
     procedure TimerCloseTimer(Sender: TObject);
   private
     { Private declarations }
+  public
+    { Public declarations }
     ini:TMemIniFile;
 
     wait_for_count_cycle : integer;
-  public
-    { Public declarations }
-    exe_tp:string;
-    admin_tp:boolean;
-    exe_tera:string;
 
-    delay_tera:integer;
-    wait_for:string;
+    current_index:integer;
+    current_section:string;
+    current_name:string;
+    current_path:string;
+    current_admin:boolean;
+    current_delay:integer;
+    current_find:string;
+    current_required:boolean;
+
+    main_name:string;
+    main_path:string;
+    main_admin:boolean;
+    main_delay:integer;
+    // find and required sections don't apply to main app
+
+    procedure Load_App_Data(idx:integer);
   end;
 
 var
-  Form1: TForm1;
+  frmMain: TfrmMain;
 
 implementation
 
 {$R *.dfm}
 
-const LNG_STARTING = 'Starting...';
-      LNG_STARTING_TERA_PROXY = 'Launching Tera Proxy...';
-      LNG_TERA_PROXY_NOT_FOUND = 'Tera Proxy not found! Please specify correct path...';
-      LNG_TERA_PROXY_WAITING = 'Waiting for Tera Proxy...';
-      LNG_STARTING_TERA = 'Launching Tera Online...';
-      LNG_TERA_NOT_FOUND = 'Tera Launcher not found! Please specify correct path...';
+const MAIN_APP_SECTION = 'Tera';
 
+      LNG_LOADING = 'Loading ...';
+      LNG_STARTING = 'Starting app...';
+
+      LNG_NOT_FOUND = 'Invalid path! Please specify correct path...';
+
+      LNG_APP_LOCATE = 'Locate and select application executable for';
+      LNG_APP_LOCATED = 'Specified a new path for app';
+
+      LNG_PROCESS_WAITING = 'Waiting for process...';
+
+      LNG_ERR_APP_NOT_FOUND = 'Failed to locate requested application!';
+      LNG_ERR_PROCESS_TIMEOUT = 'Process did not start in a reasonable ammount of time!';
+
+      LNG_MAIN_NOT_FOUND = 'Tera Launcher not found! Please specify correct path...';
+      LNG_ERR_MAIN_NOT_FOUND = 'Unable to locate Tera Launcher!';
+      LNG_MAIN_LOCATED = 'Specified a new path for Tera Launcher';
+      LNG_MAIN_STARTING = 'Launching Tera Online...';
+
+      LNG_NO_APPS = 'No apps defined! Please check and edit the ini file!';
       LNG_SHUT_DOWN = 'Shutting down...';
 
-      LNG_ERR_TERA_PROXY_NOT_FOUND = 'Unable to locate Tera Proxy!';
-      LNG_ERR_TERA_PROXY_TIMEOUT = 'Timeout waiting for proxy to start!';
-      LNG_ERR_TERA_NOT_FOUND = 'Unable to locate Tera Launcher!';
-
-
-
-
-procedure TForm1.FormCreate(Sender: TObject);
+procedure TfrmMain.Load_App_Data(idx: Integer);
+var i:integer;
 begin
-lblStatus.Caption := LNG_STARTING;
+if idx < apps.RowCount then
+   begin
+   current_index    := idx;
+   current_section  := apps.Cells[0,idx]; // used by ini to save info if needed
+   current_name     := apps.Cells[1,idx];
+   current_path     := apps.Cells[2,idx];
+   if apps.Cells[3,idx] = 'yes' then current_admin := true
+                                else current_admin := false;
+   i := StrToInt(apps.Cells[4,idx]);
+   current_delay    := i;
+   current_find     := apps.Cells[5,idx];
+   if apps.Cells[6,idx] = 'yes' then current_required := true
+                                else current_required := false;
 
-ini        := TMemIniFile.Create(ChangeFileExt(Application.ExeName,'.ini'), Tencoding.UTF8);
-admin_tp   := ini.ReadBool('TeraProxyLauncher',   'TeraProxyAdmin', true);
-exe_tp     := ini.ReadString('TeraProxyLauncher',  'TeraProxyPath', 'TeraProxy.bat');
-exe_tera   := ini.ReadString('TeraProxyLauncher',  'TeraLauncherPath', 'Tera-Launcher.exe');
-wait_for   := ini.ReadString('TeraProxyLauncher', 'TeraProxyFind', 'node.exe');
-delay_tera := ini.ReadInteger('TeraProxyLauncher', 'DelayTeraFor', 3000);
+   lblStatus.Caption := '['+IntToStr(idx+1)+'/'+IntToStr(apps.RowCount-1)+'] '+
+                        current_name;
+   lblStatus2.Caption := LNG_STARTING;
 
-// we write the info back to the ini. it will save only if tera proxy or launcher paths are not set
-// this is to write all information in the ini in case it was missing
-ini.WriteBool('TeraProxyLauncher',   'TeraProxyAdmin', admin_tp);
-ini.WriteString('TeraProxyLauncher', 'TeraProxyFind', wait_for);
-ini.WriteInteger('TeraProxyLauncher', 'DelayTeraFor', delay_tera);
-ini.UpdateFile;
-
-if delay_tera < 10 then delay_tera := 50 // minimum 50 ms
-else
-if delay_tera > 60000 then delay_tera := 60000; // maximum 1 minute (60 seconds * 1000)
-
-wait_for_count_cycle := 0;
-
-lblStatus.Caption := LNG_STARTING_TERA_PROXY;
-TimerStartProxy.Enabled := true;
+   // set delay for the timer
+   TimerStartApp.Interval := current_delay;
+   end;
 end;
 
-procedure TForm1.FormDestroy(Sender: TObject);
+procedure TfrmMain.FormCreate(Sender: TObject);
+var section_list:TStringList;
+    i,idx:integer;
+
+    sname:string;
+    need_admin, is_required:boolean;
+    use_delay:integer;
+begin
+lblStatus.Caption := '';
+lblStatus2.Caption := LNG_LOADING;
+
+// load ini file
+ini        := TMemIniFile.Create(ChangeFileExt(Application.ExeName,'.ini'), Tencoding.UTF8);
+
+// get apps to start
+section_list := TStringList.Create;
+ini.ReadSections(section_list);
+
+if section_list.Count < 2 then
+   begin
+   lblStatus2.Caption := LNG_NO_APPS;
+//   TimerClose.Interval := 3000;
+//   TimerClose.Enabled := true;
+//   exit;
+   end;
+
+apps.RowCount := section_list.Count;
+
+if section_list.Count > 0 then
+  begin
+  idx := 0;
+  for i := 0 to section_list.Count-1 do
+    begin
+    sname := section_list[i];
+
+    if (LowerCase(sname) <> LowerCase(MAIN_APP_SECTION)) AND (LowerCase(sname) <> 'settings') then
+        begin
+        apps.Cells[0,idx] := sname;
+        // app name
+        apps.Cells[1,idx] := ini.ReadString(sname, 'Name', '<<Unnamed>>');
+        // app path
+        apps.Cells[2,idx] := ini.ReadString(sname, 'Path', '-path-not-set-');
+        // app needs admin
+        need_admin        := ini.ReadBool(sname, 'Admin', false);
+        if need_admin then apps.Cells[3,idx] := 'yes'
+                      else apps.Cells[3,idx] := 'no';
+        // app delay
+        use_delay         := ini.ReadInteger(sname, 'Delay', 1000);
+        if use_delay < 50 then use_delay := 50 // minimum 50 ms
+        else if use_delay > 60000 then use_delay := 60000; // maximum 1 minute (60 seconds * 1000)
+        apps.Cells[4,idx] := IntToStr(use_delay);
+        // app wait for process
+        apps.Cells[5,idx] := ini.ReadString(sname, 'Find', '');
+        // app is required - If app is not found, execution will be stopped
+        is_required        := ini.ReadBool(sname, 'Required', false);
+        if is_required then apps.Cells[6,idx] := 'yes'
+                       else apps.Cells[6,idx] := 'no';
+
+        idx := idx+1;
+        end
+    else
+        apps.RowCount := apps.RowCount-1;
+    end;
+
+end;
+
+// get main app info
+main_name  := ini.ReadString(MAIN_APP_SECTION,  'Name',  '<<Unnamed>>');
+main_path  := ini.ReadString(MAIN_APP_SECTION,  'Path',  '-path-not-set-');
+main_admin := ini.ReadBool(MAIN_APP_SECTION,    'Admin', false);
+main_delay := ini.ReadInteger(MAIN_APP_SECTION, 'Delay', 1000);
+
+
+
+if section_list.Count > 0 then
+   begin
+   Load_App_Data(0);
+   TimerStartApp.Interval := current_delay;
+   TimerStartApp.Enabled := true;
+   end
+else
+   begin
+   // start main app only
+   lblStatus.Caption := LNG_MAIN_STARTING;
+   TimerMainApp.Interval := 5000;
+   TimerMainApp.Enabled  := true;
+   end;
+end;
+
+
+procedure TfrmMain.FormDestroy(Sender: TObject);
 begin
 ini.Free;
 end;
 
-procedure TForm1.TimerStartProxyTimer(Sender: TObject);
+
+
+procedure TfrmMain.TimerStartAppTimer(Sender: TObject);
 begin
-TimerStartProxy.Enabled := false;
-// check if tera proxy is found
-if not FileExists(exe_tp) then
+TimerStartApp.Enabled := false;
+
+if not FileExists(current_path) then
    begin
-   lblStatus.Caption := LNG_TERA_PROXY_NOT_FOUND;
+   lblStatus2.Caption := LNG_NOT_FOUND;
 
    LocateApp.FileName := '';
-   LocateApp.Filter := 'TeraProxy.bat|TeraProxy.bat';
-   LocateApp.Title  := 'Locate and select TeraProxy.bat';
+   LocateApp.Title := LNG_APP_LOCATE+' '+current_name;
    if LocateApp.Execute then
       begin
-      lblStatus.Caption := LNG_STARTING_TERA_PROXY;
-      exe_tp := LocateApp.FileName;
-      ini.WriteString('TeraProxyLauncher', 'TeraProxyPath', exe_tp);
+      lblStatus2.Caption := LNG_APP_LOCATED;
+      current_path := LocateApp.FileName;
+      ini.WriteString(current_section, 'Path', current_path);
       ini.UpdateFile;
       end
    else
       begin
-        lblStatus.Caption := LNG_ERR_TERA_PROXY_NOT_FOUND;
-        ShowMessage(LNG_ERR_TERA_PROXY_NOT_FOUND);
-        Close;
+        lblStatus2.Caption := LNG_ERR_APP_NOT_FOUND;
+        if current_required then TimerClose.Enabled := true
+        else
+          begin
+          if current_index < apps.RowCount-1 then
+             begin
+             current_index := current_index+1;
+             Load_App_Data(current_index);
+             TimerStartApp.Enabled := true;
+             end
+          else
+             begin
+             lblStatus.Caption := LNG_MAIN_STARTING;
+             lblStatus2.Caption := '';
+             TimerMainApp.Interval := main_delay;
+             TimerMainApp.Enabled  := true;
+             end;
+
+          end;
+        exit;
       end;
    end;
 
-lblStatus.Caption := LNG_TERA_PROXY_WAITING;
-if admin_tp then RunAsAdmin(0, exe_tp,'')
-            else ShellExecute(0, 'open', PChar(exe_tp),nil,PChar(ExtractFilePath(exe_tp)),SW_SHOWNORMAL);
-TimerDetectProxy.Enabled := true;
-end;
+// start app
+if current_admin then RunAsAdmin(0, current_path,'')
+                 else ShellExecute(0, 'open', PChar(current_path),nil,PChar(ExtractFilePath(current_path)),SW_SHOWNORMAL);
 
-
-procedure TForm1.TimerDetectProxyTimer(Sender: TObject);
-var pid:cardinal;
-begin
-// wait for process or asume started if no process name given
-if ( processExists(wait_for, pid) ) OR (wait_for = '') then
-  begin
-  TimerDetectProxy.Enabled := false;
-
-  lblStatus.Caption := LNG_STARTING_TERA;
-  TimerStartTera.Interval := delay_tera;
-  TimerStartTera.Enabled := true;
-  end
+// if current app has a process that must exist before continuing
+if current_find <> '' then
+   begin
+   lblStatus2.Caption := LNG_PROCESS_WAITING;
+   TimerDetectApp.Enabled := true;
+   end
 else
   begin
-  wait_for_count_cycle := wait_for_count_cycle+1;
-  // if proxy doesn't start within a minute (60 seconds * 10 checks per second)
-  if wait_for_count_cycle > 600 then
-    begin
-    lblStatus.Caption := LNG_ERR_TERA_PROXY_TIMEOUT;
-    TimerDetectProxy.Enabled := false;
-    ShowMessage(LNG_ERR_TERA_PROXY_TIMEOUT);
-    Close;
-    end;
+  if current_index < apps.RowCount-1 then
+     begin
+     current_index := current_index+1;
+     Load_App_Data(current_index);
+     TimerStartApp.Enabled := true;
+     end
+  else
+     begin
+     lblStatus.Caption := LNG_MAIN_STARTING;
+     lblStatus2.Caption := '';
+     TimerMainApp.Interval := main_delay;
+     TimerMainApp.Enabled  := true;
+     end;
   end;
+
+
 end;
 
-
-procedure TForm1.TimerStartTeraTimer(Sender: TObject);
-begin
-TimerStartTera.Enabled := false;
-
-
-// check if tera proxy is found
-if not FileExists(exe_tera) then
-   begin
-   lblStatus.Caption := LNG_TERA_NOT_FOUND;
-
-   LocateApp.FileName := '';
-   LocateApp.Filter := 'Tera-Launcher.exe|Tera-Launcher.exe';
-   LocateApp.Title  := 'Locate and select Tera-Launcher.exe';
-   if LocateApp.Execute then
-      begin
-      lblStatus.Caption := LNG_STARTING_TERA;
-      exe_tera := LocateApp.FileName;
-      ini.WriteString('TeraProxyLauncher', 'TeraLauncherPath', exe_tera);
-      ini.UpdateFile;
-      end
-   else
-      begin
-        lblStatus.Caption := LNG_ERR_TERA_NOT_FOUND;
-        ShowMessage(LNG_ERR_TERA_NOT_FOUND);
-        Close;
-      end;
-   end;
-
-ShellExecute(0, 'open', PChar(exe_tera),nil,PChar(ExtractFilePath(exe_tera)),SW_SHOWNORMAL);
-
-lblStatus.Caption := LNG_SHUT_DOWN;
-TimerClose.Enabled := true;
-end;
-
-
-procedure TForm1.TimerCloseTimer(Sender: TObject);
+procedure TfrmMain.TimerCloseTimer(Sender: TObject);
 begin
 Close;
 end;
 
+procedure TfrmMain.TimerDetectAppTimer(Sender: TObject);
+var pid:cardinal;
+begin
+// wait for process or asume started if no process name given
+if ( processExists(current_find, pid) ) OR (current_find = '') then
+  begin
+  TimerDetectApp.Enabled := false;
+  if current_index < apps.RowCount-1 then
+     begin
+     current_index := current_index+1;
+     Load_App_Data(current_index);
+     TimerStartApp.Enabled := true;
+     end
+  else
+     begin
+     lblStatus.Caption := LNG_MAIN_STARTING;
+     lblStatus2.Caption := '';
+     TimerMainApp.Interval := main_delay;
+     TimerMainApp.Enabled  := true;
+     end;
+  end
+else
+  begin
+  wait_for_count_cycle := wait_for_count_cycle+1;
+  // if app doesn't start within a minute (60 seconds * 10 checks per second)
+  if wait_for_count_cycle > 600 then
+    begin
+    lblStatus2.Caption := LNG_ERR_PROCESS_TIMEOUT;
+    TimerDetectApp.Enabled := false;
 
+    if current_required then TimerClose.Enabled := true
+    else
+      begin
+      if current_index < apps.RowCount-1 then
+         begin
+         current_index := current_index+1;
+         Load_App_Data(current_index);
+         TimerStartApp.Enabled := true;
+         end
+      else
+         begin
+         lblStatus.Caption := LNG_MAIN_STARTING;
+         lblStatus2.Caption := '';
+         TimerMainApp.Interval := main_delay;
+         TimerMainApp.Enabled  := true;
+         end;
+
+      end;
+    exit;
+
+    end;
+  end;
+
+end;
+
+
+
+procedure TfrmMain.TimerMainAppTimer(Sender: TObject);
+begin
+TimerMainApp.Enabled := false;
+
+if not FileExists(main_path) then
+   begin
+   lblStatus.Caption := LNG_MAIN_NOT_FOUND;
+
+   LocateApp.FileName := '';
+   if LocateApp.Execute then
+      begin
+      lblStatus2.Caption := LNG_MAIN_LOCATED;
+      main_path := LocateApp.FileName;
+      ini.WriteString(MAIN_APP_SECTION, 'Path', main_path);
+      ini.UpdateFile;
+      end
+   else
+      begin
+        lblStatus2.Caption := LNG_ERR_MAIN_NOT_FOUND;
+        TimerClose.Enabled := true;
+      end;
+   end;
+
+if main_admin then RunAsAdmin(0, main_path,'')
+              else ShellExecute(0, 'open', PChar(main_path),nil,PChar(ExtractFilePath(main_path)),SW_SHOWNORMAL);
+
+lblStatus.Caption := LNG_SHUT_DOWN;
+lblStatus2.Caption := '';
+
+TimerClose.Enabled := true;
+
+end;
 
 end.

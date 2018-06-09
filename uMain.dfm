@@ -1,16 +1,18 @@
-object Form1: TForm1
+object frmMain: TfrmMain
   Left = 0
   Top = 0
   BorderIcons = [biSystemMenu]
-  Caption = 'Tera Proxy Launcher'
-  ClientHeight = 456
+  Caption = 'Tera Prelauncher'
+  ClientHeight = 428
   ClientWidth = 768
   Color = clWindow
+  DoubleBuffered = True
   Font.Charset = DEFAULT_CHARSET
   Font.Color = clWindowText
   Font.Height = -11
   Font.Name = 'Tahoma'
   Font.Style = []
+  FormStyle = fsStayOnTop
   OldCreateOrder = False
   Position = poScreenCenter
   OnCreate = FormCreate
@@ -6957,55 +6959,95 @@ object Form1: TForm1
       FBCDA37FFF00855D45123B51459A8A2CD45166A28B351459A8A2CD4517BD687E
       1515D45179A8A2C1A8A2CD45166A28B35145EEAD459A8A2CD5A8B351459AA516
       1FB756A2CD45161D4517FFD9}
+    Proportional = True
   end
   object lblStatus: TLabel
-    Left = 0
-    Top = 434
-    Width = 768
-    Height = 22
+    AlignWithMargins = True
+    Left = 3
+    Top = 375
+    Width = 762
+    Height = 15
+    Margins.Bottom = 10
     Align = alBottom
     Alignment = taCenter
-    AutoSize = False
     Caption = 'Loading...'
+    Color = clWhite
     Font.Charset = ANSI_CHARSET
-    Font.Color = clWindowText
+    Font.Color = clWhite
     Font.Height = -15
     Font.Name = 'Lucida Console'
     Font.Style = []
+    ParentColor = False
     ParentFont = False
-    ExplicitTop = 316
-    ExplicitWidth = 480
+    ExplicitLeft = 8
+    ExplicitTop = 402
+    ExplicitWidth = 665
   end
-  object TimerStartProxy: TTimer
-    Enabled = False
-    Interval = 50
-    OnTimer = TimerStartProxyTimer
-    Left = 8
-    Top = 64
+  object lblStatus2: TLabel
+    AlignWithMargins = True
+    Left = 3
+    Top = 403
+    Width = 762
+    Height = 15
+    Margins.Bottom = 10
+    Align = alBottom
+    Alignment = taCenter
+    Caption = 'Main app settings!'
+    Color = clWhite
+    Font.Charset = ANSI_CHARSET
+    Font.Color = clWhite
+    Font.Height = -15
+    Font.Name = 'Lucida Console'
+    Font.Style = []
+    ParentColor = False
+    ParentFont = False
+    ExplicitWidth = 162
   end
-  object TimerDetectProxy: TTimer
-    Enabled = False
-    Interval = 100
-    OnTimer = TimerDetectProxyTimer
-    Left = 8
-    Top = 120
-  end
-  object TimerStartTera: TTimer
-    Enabled = False
-    OnTimer = TimerStartTeraTimer
-    Left = 8
-    Top = 184
+  object apps: TStringGrid
+    Left = 56
+    Top = 8
+    Width = 729
+    Height = 121
+    ColCount = 7
+    DefaultColWidth = 100
+    FixedCols = 0
+    RowCount = 1
+    FixedRows = 0
+    ScrollBars = ssVertical
+    TabOrder = 0
+    Visible = False
   end
   object LocateApp: TOpenDialog
-    Filter = 'Tera-Launcher.exe|Tera-Launcher.exe'
+    Filter = 'Application|*.exe;*.cmd;*.bat'
     Options = [ofPathMustExist, ofFileMustExist, ofEnableSizing, ofDontAddToRecent]
-    Left = 8
-    Top = 8
+    Title = 'Locate and select application executable'
+    Left = 16
+    Top = 16
+  end
+  object TimerStartApp: TTimer
+    Enabled = False
+    Interval = 50
+    OnTimer = TimerStartAppTimer
+    Left = 16
+    Top = 88
   end
   object TimerClose: TTimer
     Enabled = False
     OnTimer = TimerCloseTimer
-    Left = 8
-    Top = 248
+    Left = 16
+    Top = 272
+  end
+  object TimerMainApp: TTimer
+    Enabled = False
+    OnTimer = TimerMainAppTimer
+    Left = 16
+    Top = 216
+  end
+  object TimerDetectApp: TTimer
+    Enabled = False
+    Interval = 100
+    OnTimer = TimerDetectAppTimer
+    Left = 16
+    Top = 152
   end
 end
